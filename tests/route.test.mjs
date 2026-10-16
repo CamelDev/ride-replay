@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {prepare,sample,haversine,project,duration,demo} from '../route.js';
+const p=(lat,lon,time,ele=100,extra={})=>({lat,lon,time,ele,...extra});
+test('timestamps preserve pauses and interpolation',()=>{const r=prepare([p(0,0,0),p(0,.01,10000),p(0,.01,30000)]);assert.equal(r.total,30);assert.equal(sample(r,20).speed,0);assert.equal(sample(r,5).lon,.005);assert.ok(Math.abs(sample(r,5).speed-400.3)<1);});
+test('segments do not invent distance or elevation gain across gaps',()=>{const r=prepare([p(0,0,0),p(0,.01,10000),p(1,1,20000,300,{break:true})]);assert.ok(r.points[2].distance<1200);assert.equal(r.points[2].ascent,0);assert.equal(sample(r,15).lat,0);assert.equal(sample(r,15).speed,0);});
+test('missing and reversed times are explicit',()=>{assert.throws(()=>prepare([p(0,0,NaN),p(0,1,NaN)]),/MISSING_TIME/);assert.throws(()=>prepare([p(0,0,100),p(0,1,100)]),/increase/);const r=prepare([p(0,0,NaN),p(0,1,NaN)],60);assert.equal(r.total,60);assert.equal(r.estimated,true);});
+test('missing elevation stays missing and trimmed metrics interpolate',()=>{const r=prepare([p(0,0,0,null),p(0,.01,10000,null)]);assert.equal(sample(r,5).ele,null);assert.equal(sample(r,5).distance,r.points[1].distance/2);});
+test('antimeridian uses short arc',()=>{const r=prepare([p(0,179.9,0),p(0,-179.9,10000)]);assert.ok(haversine(r.points[0],r.points[1])<23000);assert.equal(sample(r,5).lon,180);});
+test('duration and polar projection remain valid',()=>{assert.equal(duration(3661),'1:01:01');assert.ok(Number.isFinite(project({lat:90,lon:0}).y));assert.ok(demo().total>0);});
